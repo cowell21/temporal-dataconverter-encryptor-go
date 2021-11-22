@@ -22,13 +22,11 @@ type encryptDataConverterV1 struct {
 	encryptionService  *AESEncryptionServiceV1
 	payloadConverters  map[string]converter.PayloadConverter
 	orderedEncodings   []string
-	compressionEnabled bool
 }
 
 type nightfallTemporalEncodings struct {
 	encoding string
 	isAESV1 bool
-	isGZV1  bool
 }
 
 var (
@@ -124,7 +122,7 @@ func (dc *encryptDataConverterV1) ToPayload(value interface{}) (*commonpb.Payloa
 			return nil, err
 		}
 		if unencryptedPayload != nil {
-			return dc.compressAndEncryptPayload(unencryptedPayload)
+			return dc.encryptPayload(unencryptedPayload)
 		}
 	}
 
@@ -180,7 +178,7 @@ func (dc *encryptDataConverterV1) ToStrings(payloads *commonpb.Payloads) []strin
 }
 
 // the unencrypted payload isn't mutable and need to reconstruct the payload.
-func (dc *encryptDataConverterV1) compressAndEncryptPayload(unencryptedPayload *commonpb.Payload) (*commonpb.Payload, error){
+func (dc *encryptDataConverterV1) encryptPayload(unencryptedPayload *commonpb.Payload) (*commonpb.Payload, error){
 	newMetadata := unencryptedPayload.GetMetadata()
 	if newMetadata == nil {
 		newMetadata = make(map[string][]byte)
