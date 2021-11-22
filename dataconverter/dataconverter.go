@@ -134,7 +134,7 @@ func (dc *encryptDataConverterV1) FromPayload(payload *commonpb.Payload, valuePt
 	if payload == nil {
 		return nil
 	}
-	nightfallEncodings, err := dc.decryptAndDecompress(payload)
+	nightfallEncodings, err := dc.decryptPayload(payload)
 	if err != nil {
 		return err
 	}
@@ -151,7 +151,7 @@ func (dc *encryptDataConverterV1) ToString(payload *commonpb.Payload) string {
 	if payload == nil {
 		return ""
 	}
-	nightfallEncodings, err := dc.decryptAndDecompress(payload)
+	nightfallEncodings, err := dc.decryptPayload(payload)
 	if err != nil {
 		return err.Error()
 	}
@@ -195,8 +195,8 @@ func (dc *encryptDataConverterV1) encryptPayload(unencryptedPayload *commonpb.Pa
 	}, nil
 }
 
-// decryptAndDecompress figures out from metadata whether the payload needs to be decrypted and/or decompressed
-func (dc *encryptDataConverterV1) decryptAndDecompress(payload *commonpb.Payload) (nightfallTemporalEncodings, error) {
+// decryptPayload figures out from metadata whether the payload needs to be decrypted
+func (dc *encryptDataConverterV1) decryptPayload(payload *commonpb.Payload) (nightfallTemporalEncodings, error) {
 	nightfallEncodings, err := encoding(payload)
 	if err != nil {
 		return nightfallTemporalEncodings{}, err
