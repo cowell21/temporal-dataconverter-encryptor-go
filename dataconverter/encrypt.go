@@ -1,12 +1,12 @@
 package dataconverter
 
 import (
-	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 )
 
@@ -16,7 +16,7 @@ var (
 )
 
 type AESEncryptionServiceV1 struct {
-	CipherBlock cipher.Block
+	Cipher cipher.AEAD
 }
 
 func newAESEncryptionServiceV1(opts Options) (*AESEncryptionServiceV1, error) {
@@ -28,28 +28,29 @@ func newAESEncryptionServiceV1(opts Options) (*AESEncryptionServiceV1, error) {
 		// likely invalid key length if errors here
 		return nil, err
 	}
+	gcm, err := cipher.NewGCM(cipherBlock)
+	if err != nil {
+		return nil, err
+	}
 	return &AESEncryptionServiceV1{
-		CipherBlock: cipherBlock,
+		Cipher: gcm,
 	}, nil
 }
 
 // Encrypt takes a byte array and returns an encrypted byte array
 // as base64 encoded
 func (a AESEncryptionServiceV1) Encrypt(unencryptedBytes []byte) ([]byte, error) {
-	msg := pad(unencryptedBytes)
-	cipherBytes := make([]byte, aes.BlockSize+len(msg))
-	iv := cipherBytes[:aes.BlockSize]
-	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-		// this should never happen
-		return nil, ErrIVFailure
+	if len(unencryptedBytes) == 0 { // prevent err on empty byte arrays - "cipher: message authentication failed"
+		return []byte(""), nil
 	}
-	cipher.
-		NewCFBEncrypter(a.CipherBlock, iv).
-		XORKeyStream(cipherBytes[aes.BlockSize:], msg)
-
-	var encryptedBytes = make([]byte, base64.StdEncoding.EncodedLen(len(cipherBytes)))
-	base64.StdEncoding.Encode(encryptedBytes ,cipherBytes)
-	return encryptedBytes, nil
+	nonce := make([]byte, a.Cipher.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return nil, err
+	}
+	encryptedBytes := a.Cipher.Seal(nonce, nonce, unencryptedBytes, nil)
+	encryptedEncodedData := make([]byte, base64.RawURLEncoding.EncodedLen(len(encryptedBytes)))
+	base64.RawURLEncoding.Encode(encryptedEncodedData, encryptedBytes)
+	return encryptedEncodedData, nil
 }
 
 // Decrypt takes an encrypted base64 byte array then
@@ -58,39 +59,13 @@ func (a AESEncryptionServiceV1) Decrypt(encryptedBytes []byte) ([]byte, error) {
 	if len(encryptedBytes) == 0 {
 		return []byte(""), nil
 	}
-	decodeLen := (base64.StdEncoding.DecodedLen(len(encryptedBytes)) / aes.BlockSize) * aes.BlockSize
-	decodedBytes := make([]byte, decodeLen)
-	if _, err := base64.StdEncoding.Decode(decodedBytes, encryptedBytes); err != nil {
+	decodedEncryptedBytes := make([]byte, base64.RawURLEncoding.DecodedLen(len(encryptedBytes)))
+	if _, err := base64.RawURLEncoding.Decode(decodedEncryptedBytes, encryptedBytes); err != nil {
 		return nil, err
 	}
-	iv := decodedBytes[:aes.BlockSize]
-	msg := decodedBytes[aes.BlockSize:]
-	cipher.
-		NewCFBDecrypter(a.CipherBlock, iv).
-		XORKeyStream(msg, msg)
-
-	unpadMsg, err := unpad(msg)
-	if err != nil {
-		return nil, err
+	nonceSize := a.Cipher.NonceSize()
+	if len(encryptedBytes) < nonceSize {
+		return nil, fmt.Errorf("ciphertext too short: %v", len(encryptedBytes))
 	}
-	return unpadMsg, nil
+	return a.Cipher.Open(nil, decodedEncryptedBytes[:nonceSize], decodedEncryptedBytes[nonceSize:], nil)
 }
-
-// pad for AES encryption we need the message to be divisible by AES block size
-func pad(src []byte) []byte {
-	padding := aes.BlockSize - len(src)%aes.BlockSize
-	padText := bytes.Repeat([]byte{byte(padding)}, padding)
-	return append(src, padText...)
-}
-
-// unpad remove padding we added before to allow AES encryption
-func unpad(src []byte) ([]byte, error) {
-	length := len(src)
-	unpadding := int(src[length-1])
-	if unpadding > length {
-		return nil, ErrPadFailure
-	}
-	return src[:(length - unpadding)], nil
-}
-
-

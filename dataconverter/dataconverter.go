@@ -9,21 +9,13 @@ import (
 )
 const (
 	metadataEncryptionKey     = "encryption"
-	metadataCompressionKey    = "compression"
-	metadataEncryptedAESV1    = "AESV1"
-	metadataCompressionGZV1   = "GZV1"
-	minimumPreCompressionSize = 1 << 12 // ~4KB
+	metadataEncryptedAESV1    = "AES-GCM-V1"
 )
 
 type Options struct {
 	// EncryptionKey is the encryption key used to encrypt the payloads
 	// this key must be 16, 24, 32 characters in length
 	EncryptionKey []byte
-
-	// CompressionEnabled if you wish to compress payloads
-	// in addition to encrypting them this might be beneficial if
-	// working with larger payloads.
-	CompressionEnabled bool
 }
 
 type encryptDataConverterV1 struct {
@@ -59,12 +51,15 @@ func NewEncryptDataConverterV1(opts Options) (converter.DataConverter, error) {
 	defaultTemporalPayloadConverters := []converter.PayloadConverter{
 		converter.NewNilPayloadConverter(),
 		converter.NewByteSlicePayloadConverter(),
-		// Only one proto converter should be used.
-		// Although they check for different interfaces (proto.Message and proto.Marshaler) all proto messages implements both interfaces.
+
+		// Order is important here. Both ProtoJsonPayload and ProtoPayload converters check for the same proto.Message
+		// interface. The first match (ProtoJsonPayload in this case) will always be used for serialization.
+		// Deserialization is controlled by metadata, therefore both converters can deserialize corresponding data format
+		// (JSON or binary proto).
 		converter.NewProtoJSONPayloadConverter(),
-		// NewProtoPayloadConverter(),
+		converter.NewProtoPayloadConverter(),
+
 		converter.NewJSONPayloadConverter(),
-		// nightfallCustomConverter
 	}
 	encryptionService, err := newAESEncryptionServiceV1(opts)
 	if err != nil {
@@ -74,7 +69,6 @@ func NewEncryptDataConverterV1(opts Options) (converter.DataConverter, error) {
 		payloadConverters:  make(map[string]converter.PayloadConverter, len(defaultTemporalPayloadConverters)),
 		orderedEncodings:   make([]string, len(defaultTemporalPayloadConverters)),
 		encryptionService:  encryptionService,
-		compressionEnabled: opts.CompressionEnabled,
 	}
 	for i, payloadConverter := range defaultTemporalPayloadConverters {
 		dc.payloadConverters[payloadConverter.Encoding()] = payloadConverter
@@ -192,18 +186,6 @@ func (dc *encryptDataConverterV1) compressAndEncryptPayload(unencryptedPayload *
 		newMetadata = make(map[string][]byte)
 	}
 	newMetadata[metadataEncryptionKey] = []byte(metadataEncryptedAESV1)
-
-	// compression can be resource intensive on cpu/mem
-	// we only should be compressing things that are bigger in payload size
-	// as these payloads we should benefit from a size reduction
-	if dc.compressionEnabled && len(unencryptedPayload.GetData()) > minimumPreCompressionSize {
-		compressedData, err := compressGZV1(unencryptedPayload.GetData())
-		if err != nil {
-			return nil, err
-		}
-		newMetadata[metadataCompressionKey] = []byte(metadataCompressionGZV1)
-		unencryptedPayload.Data = compressedData
-	}
 	encryptedBytes, err := dc.encryptionService.Encrypt(unencryptedPayload.GetData())
 	if err != nil {
 		return &commonpb.Payload{}, err
@@ -226,11 +208,6 @@ func (dc *encryptDataConverterV1) decryptAndDecompress(payload *commonpb.Payload
 			return nightfallTemporalEncodings{}, err
 		}
 	}
-	if nightfallEncodings.isGZV1 {
-		if payload.Data, err = decompressGZV1(payload.GetData()); err != nil {
-			return nightfallTemporalEncodings{}, err
-		}
-	}
 	return nightfallEncodings, nil
 }
 
@@ -240,12 +217,10 @@ func encoding(payload *commonpb.Payload) (nightfallTemporalEncodings, error) {
 		return nightfallTemporalEncodings{}, ErrMetadataIsNotSet
 	}
 	encryptionType, hasEncryption := metadata[metadataEncryptionKey]
-	compressionType, hasCompression := metadata[metadataCompressionKey]
 	if encoding, ok := metadata[converter.MetadataEncoding]; ok {
 		return nightfallTemporalEncodings{
 			encoding: string(encoding),
 			isAESV1: hasEncryption && (string(encryptionType) == metadataEncryptedAESV1),
-			isGZV1: hasCompression && (string(compressionType) == metadataCompressionGZV1),
 		}, nil
 	}
 	return nightfallTemporalEncodings{}, ErrEncodingIsNotSet

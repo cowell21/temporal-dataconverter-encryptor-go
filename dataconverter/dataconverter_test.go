@@ -13,20 +13,12 @@ import (
 func getOpts() Options {
 	opts := Options{
 		EncryptionKey: []byte(developmentEncryptionStringKey),
-		CompressionEnabled: true,
 	}
 	return opts
 }
 
 func getEncryptionDataConverter() converter.DataConverter {
 	encryptedDataConverter, _ := NewEncryptDataConverterV1(getOpts())
-	return encryptedDataConverter
-}
-
-func getEncryptionDataConverterCompressionDisabled() converter.DataConverter {
-	opts := getOpts()
-	opts.CompressionEnabled = false
-	encryptedDataConverter, _ := NewEncryptDataConverterV1(opts)
 	return encryptedDataConverter
 }
 
@@ -85,38 +77,6 @@ func TestDefaultDataConverter(t *testing.T) {
 		}
 		r1 := testDataConverterFunction(t, f1, context.Background(), getBigTemporalPayloadJSONExample())
 		require.Equal(t, r1, "result")
-	})
-	t.Run("big payloads should compress/decompress", func(t *testing.T) {
-		dc := getEncryptionDataConverter()
-		hugePayload, err := dc.ToPayloads(toInterface(getBigTemporalPayloadJSONExample()))
-		require.NoError(t, err, "ToPayloads found an err in Big compress payload")
-		compressType, payloadHasCompression := hugePayload.Payloads[0].Metadata[metadataCompressionKey]
-		require.True(t, payloadHasCompression)
-		require.Equal(t, string(compressType), metadataCompressionGZV1)
-		require.True(t, len(getBigTemporalPayloadJSONExample()) > len(hugePayload.Payloads[0].Data))
-		var result []byte
-		_ = dc.FromPayloads(hugePayload, &result)
-		require.Equal(t, result, getBigTemporalPayloadJSONExample())
-	})
-	t.Run("big payloads should NOT compress/decompress when compression is disabled", func(t *testing.T) {
-		dc := getEncryptionDataConverterCompressionDisabled()
-		hugePayload, err := dc.ToPayloads(toInterface(getBigTemporalPayloadJSONExample()))
-		require.NoError(t, err, "ToPayloads found an err in Big compress payload")
-		_, payloadHasCompression := hugePayload.Payloads[0].Metadata[metadataCompressionKey]
-		require.False(t, payloadHasCompression)
-		var result []byte
-		_ = dc.FromPayloads(hugePayload, &result)
-		require.Equal(t, result, getBigTemporalPayloadJSONExample())
-	})
-	t.Run("small payloads should NOT compress but still decrypt", func(t *testing.T) {
-		dc := getEncryptionDataConverter()
-		smallPayload, err := dc.ToPayloads(toInterface("smalls"))
-		require.NoError(t, err, "ToPayloads ")
-		_, payloadHasCompression := smallPayload.Payloads[0].Metadata[metadataCompressionKey]
-		require.False(t, payloadHasCompression)
-		var result string
-		_ = dc.FromPayloads(smallPayload, &result)
-		require.Equal(t, result, "smalls")
 	})
 }
 

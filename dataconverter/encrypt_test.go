@@ -45,21 +45,24 @@ func TestBasicEncryptAndDecryptByteArray(t *testing.T) {
 func TestHandleEmptyStringEncryptAndDecryptString(t *testing.T) {
 	aesEncryptionService := getNewAESEncryptionService()
 	// encrypt string
-	encryptedBytes, _ := aesEncryptionService.Encrypt([]byte(emptyString))
+	encryptedBytes, err := aesEncryptionService.Encrypt([]byte(emptyString))
+	assert.Equal(t, err, nil)
+
 	// decrypt string back to what it was
-	decryptedString, _ := aesEncryptionService.Decrypt(encryptedBytes)
+	decryptedString, err := aesEncryptionService.Decrypt(encryptedBytes)
+	assert.Equal(t, err, nil)
 	assert.Equal(t, []byte(emptyString), decryptedString)
 }
 
 func TestCanDecryptOnNewAesInstance(t *testing.T) {
-	encryptedBytes := []byte("iG/6fUgv4Z6YwMUV6hzwYbth87Cyd5a0OspWa9Z5oAU=") // "hello" string encrypted
+	encryptedBytes := []byte("csLdzmyY8H7-iGXVWCWKEQAETs1gUFhqBdxNH8BG_raM") // "hello" string encrypted
 	aesEncryptionService := getNewAESEncryptionService()
 	decryptedBytes, _ := aesEncryptionService.Decrypt(encryptedBytes)
 	assert.Equal(t, testString, string(decryptedBytes))
 }
 
 func TestCanDecryptOnNewAesInstanceByteArray(t *testing.T) {
-	encryptedString := "iG/6fUgv4Z6YwMUV6hzwYbth87Cyd5a0OspWa9Z5oAU=" // "hello" string encrypted
+	encryptedString := "csLdzmyY8H7-iGXVWCWKEQAETs1gUFhqBdxNH8BG_raM" // "hello" string encrypted
 	aesEncryptionService := getNewAESEncryptionService()
 	decryptedString, _ := aesEncryptionService.Decrypt([]byte(encryptedString))
 	assert.Equal(t, testString, string(decryptedString))
@@ -81,5 +84,3 @@ func TestShouldHandleEmptyBytesDecrypt(t *testing.T) {
 	assert.Equal(t, err, nil)
 	assert.Equal(t, decryptedString, []byte(emptyString))
 }
-
-
