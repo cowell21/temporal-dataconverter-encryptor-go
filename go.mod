@@ -1,4 +1,4 @@
-module github.com/nightfallai/temporal-dataconverter-encryptor-go
+module github.com/cowell21/temporal-dataconverter-encryptor-go
 
 go 1.16
 
