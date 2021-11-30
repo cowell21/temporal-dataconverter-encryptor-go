@@ -1,7 +1,7 @@
 package temporal_dataconverter_encryptor_go
 
 import (
-	"github.com/nightfallai/temporal-dataconverter-encryptor-go/dataconverter"
+	"github.com/cowell21/temporal-dataconverter-encryptor-go/dataconverter"
 	"go.temporal.io/sdk/client"
 )
 
